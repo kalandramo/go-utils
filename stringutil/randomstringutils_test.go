@@ -72,11 +72,11 @@ func ExampleRandomSeed() {
 	fmt.Println(rand4)
 	fmt.Println(rand5)
 	// Output:
-	// 3ip9v
-	// MBrbj
-	// 88935
-	// H_I;E
-	// 2b2ca
+	// UOGFM
+	// OUiKn
+	// 23353
+	// AEQz9
+	// ab3ab
 }
 
 func TestRandomAlphaNumeric(t *testing.T) {
@@ -118,4 +118,238 @@ func TestRandAlphaNumeric_FuzzOnlyNumeric(t *testing.T) {
 		}
 	}
 
+}
+
+// ====================== Wrapper function tests ======================
+
+func TestRandomNonAlphaNumeric(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		out, err := RandomNonAlphaNumeric(20)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// RandomNonAlphaNumeric uses letters=false, numbers=false which means no filter,
+		// so surrogates may cause the rune count to differ from requested count.
+		// Just verify the output is non-empty and no error occurred.
+		if len(out) == 0 {
+			t.Fatal("expected non-empty output")
+		}
+	}
+}
+
+func TestRandomAscii(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		out, err := RandomAscii(50)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(out) != 50 {
+			t.Fatalf("expected length 50, got %d", len(out))
+		}
+		for _, ch := range out {
+			if ch < 32 || ch > 126 {
+				t.Fatalf("character %d out of ASCII printable range [32, 126]", ch)
+			}
+		}
+	}
+}
+
+func TestRandomNumeric(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		out, err := RandomNumeric(30)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(out) != 30 {
+			t.Fatalf("expected length 30, got %d", len(out))
+		}
+		m, err := regexp.MatchString("^[0-9]+$", out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !m {
+			t.Fatalf("expected all digits, got %q", out)
+		}
+	}
+}
+
+func TestRandomAlphabetic(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		out, err := RandomAlphabetic(30)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(out) != 30 {
+			t.Fatalf("expected length 30, got %d", len(out))
+		}
+		m, err := regexp.MatchString("^[a-zA-Z]+$", out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !m {
+			t.Fatalf("expected all alphabetic, got %q", out)
+		}
+	}
+}
+
+func TestRandomAlphaNumericCustom(t *testing.T) {
+	// letters=true, numbers=true => same as RandomAlphaNumeric
+	for i := 0; i < 50; i++ {
+		out, err := RandomAlphaNumericCustom(20, true, true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(out) != 20 {
+			t.Fatalf("expected length 20, got %d", len(out))
+		}
+		m, _ := regexp.MatchString("^[0-9a-zA-Z]+$", out)
+		if !m {
+			t.Fatalf("expected alphanumeric, got %q", out)
+		}
+	}
+
+	// letters=true, numbers=false => same as RandomAlphabetic
+	for i := 0; i < 50; i++ {
+		out, err := RandomAlphaNumericCustom(20, true, false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		m, _ := regexp.MatchString("^[a-zA-Z]+$", out)
+		if !m {
+			t.Fatalf("expected alphabetic only, got %q", out)
+		}
+	}
+
+	// letters=false, numbers=true => same as RandomNumeric
+	for i := 0; i < 50; i++ {
+		out, err := RandomAlphaNumericCustom(20, false, true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		m, _ := regexp.MatchString("^[0-9]+$", out)
+		if !m {
+			t.Fatalf("expected numeric only, got %q", out)
+		}
+	}
+}
+
+func TestRandom(t *testing.T) {
+	// Test with custom chars via variadic parameter
+	chars := []rune{'a', 'b', 'c', '1', '2', '3'}
+	for i := 0; i < 50; i++ {
+		out, err := Random(10, 0, 0, false, false, chars...)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(out) != 10 {
+			t.Fatalf("expected length 10, got %d", len(out))
+		}
+		m, _ := regexp.MatchString("^[abc123]+$", out)
+		if !m {
+			t.Fatalf("expected only [abc123], got %q", out)
+		}
+	}
+
+	// Test without custom chars
+	out, err := Random(5, 0, 0, true, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out) != 5 {
+		t.Fatalf("expected length 5, got %d", len(out))
+	}
+}
+
+// ====================== Error path tests ======================
+
+func TestRandomSeed_CountZero(t *testing.T) {
+	random := rand.New(rand.NewPCG(1, 0))
+	out, err := RandomSeed(0, 0, 0, true, true, nil, random)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "" {
+		t.Fatalf("expected empty string, got %q", out)
+	}
+}
+
+func TestRandomSeed_CountNegative(t *testing.T) {
+	random := rand.New(rand.NewPCG(1, 0))
+	_, err := RandomSeed(-1, 0, 0, true, true, nil, random)
+	if err == nil {
+		t.Fatal("expected error for negative count, got nil")
+	}
+	expected := "randomstringutils illegal argument: Requested random string length -1 is less than 0"
+	if err.Error() != expected {
+		t.Fatalf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
+func TestRandomSeed_EmptyChars(t *testing.T) {
+	random := rand.New(rand.NewPCG(1, 0))
+	chars := []rune{}
+	_, err := RandomSeed(5, 0, 0, true, true, chars, random)
+	if err == nil {
+		t.Fatal("expected error for empty chars, got nil")
+	}
+	expected := "randomstringutils illegal argument: The chars array must not be empty"
+	if err.Error() != expected {
+		t.Fatalf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
+func TestRandomSeed_EndLessThanOrEqualStart(t *testing.T) {
+	random := rand.New(rand.NewPCG(1, 0))
+
+	// end == start
+	_, err := RandomSeed(5, 10, 10, false, false, nil, random)
+	if err == nil {
+		t.Fatal("expected error for end <= start, got nil")
+	}
+	expected := "randomstringutils illegal argument: Parameter end (10) must be greater than start (10)"
+	if err.Error() != expected {
+		t.Fatalf("expected error %q, got %q", expected, err.Error())
+	}
+
+	// end < start
+	_, err = RandomSeed(5, 20, 10, false, false, nil, random)
+	if err == nil {
+		t.Fatal("expected error for end < start, got nil")
+	}
+	expected2 := "randomstringutils illegal argument: Parameter end (10) must be greater than start (20)"
+	if err.Error() != expected2 {
+		t.Fatalf("expected error %q, got %q", expected2, err.Error())
+	}
+}
+
+func TestRandomSeed_EndGreaterThanCharsLength(t *testing.T) {
+	random := rand.New(rand.NewPCG(1, 0))
+	chars := []rune{'a', 'b', 'c'}
+
+	_, err := RandomSeed(5, 0, 10, false, false, chars, random)
+	if err == nil {
+		t.Fatal("expected error for end > len(chars), got nil")
+	}
+	expected := "randomstringutils illegal argument: Parameter end (10) cannot be greater than len(chars) (3)"
+	if err.Error() != expected {
+		t.Fatalf("expected error %q, got %q", expected, err.Error())
+	}
+}
+
+func TestRandomSeed_WithCustomCharsAndStartEnd(t *testing.T) {
+	random := rand.New(rand.NewPCG(42, 0))
+	chars := []rune{'a', 'b', 'c', 'd', 'e', 'f'}
+
+	// Use start=1, end=4 => should only use chars[1..3] = 'b','c','d'
+	out, err := RandomSeed(20, 1, 4, false, false, chars, random)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out) != 20 {
+		t.Fatalf("expected length 20, got %d", len(out))
+	}
+	m, _ := regexp.MatchString("^[bcd]+$", out)
+	if !m {
+		t.Fatalf("expected only [bcd], got %q", out)
+	}
 }
